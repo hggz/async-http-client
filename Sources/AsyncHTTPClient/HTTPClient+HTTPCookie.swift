@@ -30,6 +30,9 @@ import Musl
 import Android
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(WinSDK)
+import WinSDK
+import ucrt
 #endif
 
 extension HTTPClient {
@@ -216,11 +219,19 @@ extension String.UTF8View.SubSequence {
     }
 }
 
-nonisolated(unsafe) private let posixLocale: UnsafeMutableRawPointer = {
+nonisolated(unsafe) private let posixLocale: UnsafeMutableRawPointer? = {
     // All POSIX systems must provide a "POSIX" locale, and its date/time formats are US English.
     // https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap07.html#tag_07_03_05
+    //
+    // Windows UCRT has no `locale_t` / `newlocale`. Our C shim
+    // (`swiftahc_cshims_strptime_l`) ignores the locale argument on Windows
+    // because the only formats AHC passes are POSIX C-locale (US English).
+#if os(Windows)
+    return nil
+#else
     let _posixLocale = newlocale(LC_TIME_MASK | LC_NUMERIC_MASK, "POSIX", nil)!
     return UnsafeMutableRawPointer(_posixLocale)
+#endif
 }()
 
 private func parseTimestamp(_ utf8: String.UTF8View.SubSequence, format: String) -> tm? {
@@ -251,6 +262,12 @@ private func parseCookieTime(_ timestampUTF8: String.UTF8View.SubSequence) -> In
     else {
         return nil
     }
+#if os(Windows)
+    // Windows UCRT has `_mkgmtime` instead of POSIX `timegm`, and no `EOVERFLOW`.
+    let timestamp = Int64(_mkgmtime(&timeComponents))
+    return timestamp == -1 ? nil : timestamp
+#else
     let timestamp = Int64(timegm(&timeComponents))
     return timestamp == -1 && errno == EOVERFLOW ? nil : timestamp
+#endif
 }

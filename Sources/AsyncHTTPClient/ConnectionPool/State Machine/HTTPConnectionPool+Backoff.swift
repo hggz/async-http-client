@@ -20,6 +20,11 @@ import func Darwin.pow
 import func Musl.pow
 #elseif canImport(Android)
 import func Android.pow
+#elseif canImport(WinSDK)
+// Windows ucrt re-exported by WinSDK; `pow` is a top-level function. No need to
+// `import func WinSDK.pow` explicitly — it's resolved by `import WinSDK` which is the
+// idiomatic pattern in the rest of this fork.
+import WinSDK
 #else
 import func Glibc.pow
 #endif
